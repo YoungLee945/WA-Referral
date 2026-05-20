@@ -1,0 +1,963 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Referral WA</title>
+    
+    <!-- 1. Tailwind CSS (样式库) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. React & ReactDOM (使用更稳定的 cdnjs 源) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+    
+    <!-- 3. Babel (解析器) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    
+    <!-- 4. Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 动画效果 */
+        .animate-enter { animation: enter 0.4s ease-out forwards; }
+        @keyframes enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ===== SUPABASE 配置 =====
+        const SUPABASE_URL = 'https://ukezpyuegzzuhpefbbkn.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrZXpweXVlZ3p6dWhwZWZiYmtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTkzMDEsImV4cCI6MjA3OTYzNTMwMX0.ye6knbW3jyFVUSEjVqoV9K49DJ6DaEcvqlORUqRtmZY';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- 0. 内置图标库 (解决 Lucide 加载失败问题) ---
+        // 直接将 SVG 代码写入组件，不再依赖外部请求
+        const IconBase = ({ children, size = 24, className = "", ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                {children}
+            </svg>
+        );
+
+        const Icons = {
+            Search: (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>,
+            Bell: (p) => <IconBase {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></IconBase>,
+            User: (p) => <IconBase {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>,
+            MapPin: (p) => <IconBase {...p}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></IconBase>,
+            ChevronDown: (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>,
+            ExternalLink: (p) => <IconBase {...p}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></IconBase>,
+            Shield: (p) => <IconBase {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></IconBase>,
+            Heart: (p) => <IconBase {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></IconBase>,
+            Scale: (p) => <IconBase {...p}><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></IconBase>,
+            Briefcase: (p) => <IconBase {...p}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>,
+            CheckCircle: (p) => <IconBase {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></IconBase>,
+            AlertCircle: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>,
+            Home: (p) => <IconBase {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconBase>,
+            Info: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>,
+            Lock: (p) => <IconBase {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>,
+            ArrowRight: (p) => <IconBase {...p}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></IconBase>,
+            Users: (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
+            Download: (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>,
+            Utensils: (p) => <IconBase {...p}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></IconBase>,
+            HeartPulse: (p) => <IconBase {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></IconBase>,
+            Gavel: (p) => <IconBase {...p}><path d="m14 13-7.5 7.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L11 10"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></IconBase>,
+            Accessibility: (p) => <IconBase {...p}><circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 4.68"/><path d="M8 14h.01"/><path d="M11 2a2 2 0 1 0 4 0"/></IconBase>,
+            ChevronRight: (p) => <IconBase {...p}><path d="m9 18 6-6-6-6"/></IconBase>,
+            StickyNote: (p) => <IconBase {...p}><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></IconBase>,
+            AlertTriangle: (p) => <IconBase {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></IconBase>,
+            X: (p) => <IconBase {...p}><path d="M18 6 6 18"/><path d="m6 6 18 18"/></IconBase>,
+            Check: (p) => <IconBase {...p}><path d="M20 6 9 17l-5-5"/></IconBase>,
+            Filter: (p) => <IconBase {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconBase>,
+            Phone: (p) => <IconBase {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></IconBase>,
+            Globe: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></IconBase>,
+            Calendar: (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconBase>,
+            Sparkles: (p) => <IconBase {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconBase>,
+            Loader2: (p) => <IconBase {...p}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconBase>,
+            Thermometer: (p) => <IconBase {...p}><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></IconBase>,
+            Banknote: (p) => <IconBase {...p}><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></IconBase>,
+            Baby: (p) => <IconBase {...p}><path d="M9 12h.01M15 12h.01"/><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/></IconBase>,
+            UserPlus: (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></IconBase>
+        };
+
+        // --- 1. 真实西澳机构数据库 (Nested: Agency -> Programs) ---
+        const SERVICES_DB = [
+            {
+                id: 'ag-legalaid',
+                name: 'Legal Aid WA',
+                location: 'Perth CBD & Regional Courts',
+                phone: '1300 650 579',
+                website: 'https://www.legalaid.wa.gov.au/',
+                color: 'bg-indigo-50 text-indigo-700',
+                icon: Icons.Scale,
+                programs: [
+                    {
+                        id: 'prog-la-civil',
+                        title: 'Civil Law Division',
+                        tags: ['civil_law', 'employment_law'],
+                        availability: 'Waitlist (3-4 Weeks)',
+                        description: 'Legal advice and representation for civil law matters including employment disputes and guardianship.',
+                        eligibility: 'Strict means test applies.'
+                    },
+                    {
+                        id: 'prog-la-duty',
+                        title: 'Duty Lawyer Service',
+                        tags: ['criminal_law'],
+                        availability: 'Immediate (At Court)',
+                        description: 'On-the-spot legal advice and representation for first appearances in Magistrates Court.',
+                        eligibility: 'Available to anyone at court.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-foodbank',
+                name: 'Foodbank WA',
+                location: 'Perth Airport',
+                phone: '1800 979 777',
+                website: 'https://www.foodbank.org.au/',
+                color: 'bg-emerald-50 text-emerald-700',
+                icon: Icons.Utensils,
+                programs: [
+                    {
+                        id: 'prog-fb-hampers',
+                        title: 'Emergency Relief Hampers',
+                        tags: ['food_relief'],
+                        availability: 'Immediate',
+                        description: 'Essential food hampers including staples, fresh produce, and frozen meals.',
+                        eligibility: 'Referral required from registered agency.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-entrypoint',
+                name: 'Entrypoint Perth',
+                location: 'Phone Service',
+                phone: '6496 0001',
+                website: 'https://entrypointperth.com.au/',
+                color: 'bg-blue-50 text-blue-700',
+                icon: Icons.Home,
+                programs: [
+                    {
+                        id: 'prog-ep-assess',
+                        title: 'Homelessness Assessment',
+                        tags: ['homelessness_assess'],
+                        availability: 'Immediate',
+                        description: 'Central intake and assessment service connecting people to accommodation providers.',
+                        eligibility: 'Anyone at risk of homelessness.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-anglicare',
+                name: 'Anglicare WA',
+                location: 'East Perth',
+                phone: '1300 11 44 46',
+                website: 'https://www.anglicarewa.org.au/',
+                color: 'bg-rose-50 text-rose-700',
+                icon: Icons.Users,
+                programs: [
+                    {
+                        id: 'prog-ang-fdv',
+                        title: 'FDV Safety Support',
+                        tags: ['fdv_victim'],
+                        availability: 'Immediate',
+                        description: 'Safety planning and support for women and children leaving violence.',
+                        eligibility: 'Women experiencing FDV.'
+                    },
+                    {
+                        id: 'prog-ang-fin',
+                        title: 'Financial Counselling',
+                        tags: ['financial_counselling'],
+                        availability: 'Waitlist (2 Weeks)',
+                        description: 'Confidential guidance for managing debt and negotiating with creditors.',
+                        eligibility: 'Anyone in financial stress.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-ruah',
+                name: 'Ruah Community Services',
+                location: 'Subiaco',
+                phone: '13 78 24',
+                website: 'https://www.ruah.org.au/',
+                color: 'bg-purple-50 text-purple-700',
+                icon: Icons.Heart,
+                programs: [
+                    {
+                        id: 'prog-ruah-tenancy',
+                        title: 'Tenancy Support',
+                        tags: ['tenancy_support'],
+                        availability: 'Waitlist (2 Weeks)',
+                        description: 'Support for people at risk of eviction to maintain their tenancy.',
+                        eligibility: 'At risk of homelessness.'
+                    },
+                    {
+                        id: 'prog-ruah-mental',
+                        title: 'Wellness & Recovery',
+                        tags: ['mental_health_adult'],
+                        availability: 'Waitlist (4 Weeks)',
+                        description: 'Psychosocial support for adults with severe mental illness.',
+                        eligibility: 'Diagnosed mental health condition.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-youthfocus',
+                name: 'Youth Focus',
+                location: 'Burswood',
+                phone: '08 6266 4333',
+                website: 'https://youthfocus.com.au/',
+                color: 'bg-cyan-50 text-cyan-700',
+                icon: Icons.Baby,
+                programs: [
+                    {
+                        id: 'prog-yf-counselling',
+                        title: 'Youth Counselling',
+                        tags: ['mental_health_youth'],
+                        availability: 'Waitlist (6 Weeks)',
+                        description: 'Free, professional face-to-face counseling for young people.',
+                        eligibility: 'Aged 12-25.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-holyoake',
+                name: 'Holyoake',
+                location: 'Victoria Park',
+                phone: '08 9416 4444',
+                website: 'https://holyoake.org.au/',
+                color: 'bg-green-50 text-green-700',
+                icon: Icons.Thermometer,
+                programs: [
+                    {
+                        id: 'prog-holy-aod',
+                        title: 'Alcohol & Other Drugs Counselling',
+                        tags: ['aod_support'],
+                        availability: 'Waitlist (3 Weeks)',
+                        description: 'Counselling for people experiencing issues with alcohol or substance use.',
+                        eligibility: 'Open intake.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-derbarl',
+                name: 'Derbarl Yerrigan Health',
+                location: 'East Perth',
+                phone: '08 9421 3888',
+                website: 'https://www.dyhs.org.au/',
+                color: 'bg-red-50 text-red-700',
+                icon: Icons.HeartPulse,
+                programs: [
+                    {
+                        id: 'prog-dy-health',
+                        title: 'Aboriginal Medical Service',
+                        tags: ['cald_health', 'mental_health_adult'],
+                        availability: 'Same Day',
+                        description: 'Culturally secure GP and wellbeing support.',
+                        eligibility: 'Aboriginal and Torres Strait Islander people.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-circlegreen',
+                name: 'Circle Green',
+                location: 'Perth CBD',
+                phone: '6148 3636',
+                website: 'https://circlegreen.org.au/',
+                color: 'bg-teal-50 text-teal-700',
+                icon: Icons.Home,
+                programs: [
+                    {
+                        id: 'prog-cg-tenancy',
+                        title: 'Tenancy Law',
+                        tags: ['tenancy_law'],
+                        availability: 'Waitlist (1 Week)',
+                        description: 'Legal advice for residential tenants.',
+                        eligibility: 'Tenants only.'
+                    },
+                    {
+                        id: 'prog-cg-hum',
+                        title: 'Humanitarian Law',
+                        tags: ['immigration_law'],
+                        availability: 'Variable',
+                        description: 'Legal help for refugees and humanitarian visa holders.',
+                        eligibility: 'Visa holders.'
+                    }
+                ]
+            },
+            {
+                id: 'ag-apm',
+                name: 'APM Communities',
+                location: 'Statewide',
+                phone: '1800 276 522',
+                website: 'https://apm.net.au/',
+                color: 'bg-violet-50 text-violet-700',
+                icon: Icons.Accessibility,
+                programs: [
+                    {
+                        id: 'prog-apm-lac',
+                        title: 'NDIS Local Area Coordination',
+                        tags: ['ndis_access'],
+                        availability: 'Immediate',
+                        description: 'Helping people access and understand the NDIS.',
+                        eligibility: 'People with disability aged 7-64.'
+                    }
+                ]
+            }
+        ];
+
+        // --- 2. 需求配置 ---
+        const NEEDS_CONFIG = [
+            {
+                id: 'crisis', title: 'Crisis & Safety', icon: Icons.Utensils,
+                subCategories: [{ id: 'food_relief', label: 'Food Relief' }, { id: 'financial_counselling', label: 'Financial Counselling' }, { id: 'emergency_accom', label: 'Emergency Accommodation' }]
+            },
+            {
+                id: 'housing', title: 'Housing', icon: Icons.Home,
+                subCategories: [{ id: 'homelessness_assess', label: 'Homelessness Assessment' }, { id: 'tenancy_support', label: 'Tenancy Support' }, { id: 'youth_housing', label: 'Youth Housing' }]
+            },
+            {
+                id: 'health', title: 'Health & Wellbeing', icon: Icons.HeartPulse,
+                subCategories: [{ id: 'mental_health_adult', label: 'Mental Health (Adult)' }, { id: 'mental_health_youth', label: 'Mental Health (Youth)' }, { id: 'aod_support', label: 'Alcohol & Drugs' }, { id: 'cald_health', label: 'Multicultural Health' }]
+            },
+            {
+                id: 'family', title: 'Family & DV', icon: Icons.Users,
+                subCategories: [{ id: 'fdv_victim', label: 'FDV Support' }, { id: 'family_dispute', label: 'Family Dispute' }, { id: 'parenting_support', label: 'Parenting Support' }]
+            },
+            {
+                id: 'legal', title: 'Legal', icon: Icons.Gavel,
+                subCategories: [{ id: 'civil_law', label: 'Civil Law' }, { id: 'criminal_law', label: 'Criminal Law' }, { id: 'tenancy_law', label: 'Tenancy Law' }, { id: 'immigration_law', label: 'Immigration' }, { id: 'employment_law', label: 'Employment Law' }]
+            },
+            {
+                id: 'disability', title: 'Disability', icon: Icons.Accessibility,
+                subCategories: [{ id: 'ndis_access', label: 'NDIS Access' }, { id: 'carer_support', label: 'Carer Support' }]
+            }
+        ];
+
+        // --- 3. 多语言支持 (10 Languages) ---
+        const translations = {
+            en: {
+                app_name: "Open Referral WA", nav_dash: "Dashboard", nav_new: "New Referral", nav_dir: "Directory",
+                btn_start: "Start Referral", btn_cases: "My Caseload", back_title: "Caseload Management",
+                assess_title: "Assessment", assess_intro: "Select specific needs to match with verified WA agencies.",
+                btn_match: "Generate Matches", res_title: "Matched Services", btn_proceed: "Proceed to Basket",
+                fil_title: "Filters", btn_add: "Add", btn_added: "Added", warn_title: "Zero Data Boundary", warn_msg: "Leaving platform. No data stored.",
+                note_title: "Notes", btn_save: "Save", btn_cancel: "Cancel", open_portal: "Open Portal", empty_basket: "Basket is empty.",
+                sev_low: "Low", sev_med: "Med", sev_high: "High", sev_crit: "Critical",
+                fil_loc: "Location", fil_avail: "Availability", fil_cul: "Cultural Safety",
+                th_case: "Case ID", th_needs: "Needs", th_sev: "Severity", th_status: "Status", th_action: "Action",
+                show_filters: "Show Filters", hide_filters: "Hide Filters"
+            },
+            zh: {
+                app_name: "Open Referral WA", nav_dash: "仪表盘", nav_new: "新建转介", nav_dir: "名录",
+                btn_start: "开始转介", btn_cases: "我的案例", back_title: "案例管理",
+                assess_title: "评估", assess_intro: "选择具体需求以匹配验证过的西澳机构。",
+                btn_match: "生成匹配", res_title: "匹配服务", btn_proceed: "前往转介篮",
+                fil_title: "筛选", btn_add: "添加", btn_added: "已添加", warn_title: "零数据边界", warn_msg: "即将离开平台，此处不存储数据。",
+                note_title: "备注", btn_save: "保存", btn_cancel: "取消", open_portal: "打开门户", empty_basket: "篮子为空",
+                sev_low: "低", sev_med: "中", sev_high: "高", sev_crit: "紧急",
+                fil_loc: "位置", fil_avail: "可用性", fil_cul: "文化安全",
+                th_case: "案例编号", th_needs: "需求", th_sev: "严重程度", th_status: "状态", th_action: "操作",
+                show_filters: "显示筛选", hide_filters: "隐藏筛选"
+            },
+            es: { app_name: "Open Referral WA", nav_dash: "Tablero", nav_new: "Nueva Referencia", btn_start: "Nueva Referencia", btn_add: "Añadir", btn_added: "Añadido", btn_cases: "Mis Casos", back_title: "Gestión de Casos", assess_title: "Evaluación", assess_intro: "Seleccione necesidades.", btn_match: "Generar", res_title: "Servicios", btn_proceed: "Cesta", fil_title: "Filtros", warn_title: "Límite de Datos", warn_msg: "Saliendo de plataforma.", note_title: "Notas", btn_save: "Guardar", btn_cancel: "Cancelar", open_portal: "Abrir Portal", empty_basket: "Vacío", sev_low: "Bajo", sev_med: "Medio", sev_high: "Alto", sev_crit: "Crítico", fil_loc: "Ubicación", fil_avail: "Disponibilidad", fil_cul: "Seguridad", th_case: "ID", th_needs: "Necesidades", th_sev: "Gravedad", th_status: "Estado", th_action: "Acción", show_filters: "Mostrar", hide_filters: "Ocultar" },
+            fr: { app_name: "Open Referral WA", nav_dash: "Tableau", nav_new: "Nouvelle", btn_start: "Commencer", btn_add: "Ajouter", btn_added: "Ajouté", btn_cases: "Mes Cas", back_title: "Gestion", assess_title: "Évaluation", assess_intro: "Sélectionnez besoins.", btn_match: "Générer", res_title: "Services", btn_proceed: "Panier", fil_title: "Filtres", warn_title: "Limite", warn_msg: "Sortie plateforme.", note_title: "Notes", btn_save: "Sauver", btn_cancel: "Annuler", open_portal: "Ouvrir", empty_basket: "Vide", sev_low: "Faible", sev_med: "Moyen", sev_high: "Élevé", sev_crit: "Critique", fil_loc: "Lieu", fil_avail: "Dispo", fil_cul: "Culture", th_case: "ID", th_needs: "Besoins", th_sev: "Sévérité", th_status: "Statut", th_action: "Action", show_filters: "Afficher", hide_filters: "Masquer" },
+            de: { app_name: "Open Referral WA", nav_dash: "Dashboard", nav_new: "Neu", btn_start: "Starten", btn_add: "Hinzufügen", btn_added: "Hinzugefügt", btn_cases: "Meine Fälle", back_title: "Fallmanagement", assess_title: "Bewertung", assess_intro: "Bedürfnisse wählen.", btn_match: "Generieren", res_title: "Dienste", btn_proceed: "Zum Korb", fil_title: "Filter", warn_title: "Datengrenze", warn_msg: "Keine Daten gespeichert.", note_title: "Notizen", btn_save: "Speichern", btn_cancel: "Abbrechen", open_portal: "Portal Öffnen", empty_basket: "Leer", sev_low: "Niedrig", sev_med: "Mittel", sev_high: "Hoch", sev_crit: "Kritisch", fil_loc: "Ort", fil_avail: "Verfügbarkeit", fil_cul: "Kultur", th_case: "ID", th_needs: "Bedürfnisse", th_sev: "Schweregrad", th_status: "Status", th_action: "Aktion", show_filters: "Anzeigen", hide_filters: "Ausblenden" },
+            ja: { app_name: "Open Referral WA", nav_dash: "ダッシュボード", nav_new: "新規", btn_start: "開始", btn_add: "追加", btn_added: "追加済み", btn_cases: "私のケース", back_title: "ケース管理", assess_title: "評価", assess_intro: "ニーズを選択。", btn_match: "生成", res_title: "サービス", btn_proceed: "バスケットへ", fil_title: "フィルター", warn_title: "境界", warn_msg: "データは保存されません。", note_title: "メモ", btn_save: "保存", btn_cancel: "キャンセル", open_portal: "ポータル", empty_basket: "空です", sev_low: "低", sev_med: "中", sev_high: "高", sev_crit: "緊急", fil_loc: "場所", fil_avail: "可用性", fil_cul: "文化", th_case: "ID", th_needs: "ニーズ", th_sev: "重大度", th_status: "状態", th_action: "操作", show_filters: "表示", hide_filters: "隠す" },
+            ko: { app_name: "Open Referral WA", nav_dash: "대시보드", nav_new: "새 의뢰", btn_start: "시작", btn_add: "추가", btn_added: "추가됨", btn_cases: "내 케이스", back_title: "케이스 관리", assess_title: "평가", assess_intro: "요구사항 선택.", btn_match: "생성", res_title: "서비스", btn_proceed: "장바구니", fil_title: "필터", warn_title: "경계", warn_msg: "데이터 저장 안됨.", note_title: "메모", btn_save: "저장", btn_cancel: "취소", open_portal: "열기", empty_basket: "비었음", sev_low: "낮음", sev_med: "중간", sev_high: "높음", sev_crit: "심각", fil_loc: "위치", fil_avail: "가용성", fil_cul: "문화", th_case: "ID", th_needs: "필요", th_sev: "심각도", th_status: "상태", th_action: "작업", show_filters: "표시", hide_filters: "숨기기" },
+            vi: { app_name: "Open Referral WA", nav_dash: "Bảng điều khiển", nav_new: "Mới", btn_start: "Bắt đầu", btn_add: "Thêm", btn_added: "Đã thêm", btn_cases: "Hồ sơ", back_title: "Quản lý", assess_title: "Đánh giá", assess_intro: "Chọn nhu cầu.", btn_match: "Tạo", res_title: "Dịch vụ", btn_proceed: "Giỏ", fil_title: "Bộ lọc", warn_title: "Ranh giới", warn_msg: "Không lưu dữ liệu.", note_title: "Ghi chú", btn_save: "Lưu", btn_cancel: "Hủy", open_portal: "Mở", empty_basket: "Trống", sev_low: "Thấp", sev_med: "TB", sev_high: "Cao", sev_crit: "Nguy hiểm", fil_loc: "Vị trí", fil_avail: "Có sẵn", fil_cul: "Văn hóa", th_case: "ID", th_needs: "Nhu cầu", th_sev: "Mức độ", th_status: "Trạng thái", th_action: "Hành động", show_filters: "Hiện", hide_filters: "Ẩn" },
+            it: { app_name: "Open Referral WA", nav_dash: "Cruscotto", nav_new: "Nuovo", btn_start: "Inizio", btn_add: "Aggiungi", btn_added: "Aggiunto", btn_cases: "Casi", back_title: "Gestione", assess_title: "Valutazione", assess_intro: "Seleziona bisogni.", btn_match: "Generare", res_title: "Servizi", btn_proceed: "Cestino", fil_title: "Filtri", warn_title: "Confine", warn_msg: "Nessun dato salvato.", note_title: "Note", btn_save: "Salva", btn_cancel: "Annulla", open_portal: "Apri", empty_basket: "Vuoto", sev_low: "Basso", sev_med: "Medio", sev_high: "Alto", sev_crit: "Critico", fil_loc: "Posizione", fil_avail: "Disponibilità", fil_cul: "Cultura", th_case: "ID", th_needs: "Bisogni", th_sev: "Gravità", th_status: "Stato", th_action: "Azione", show_filters: "Mostra", hide_filters: "Nascondi" },
+            ar: { app_name: "Open Referral WA", nav_dash: "لوحة القيادة", nav_new: "جديد", btn_start: "بدء", btn_add: "إضافة", btn_added: "مضاف", btn_cases: "حالاتي", back_title: "إدارة", assess_title: "تقييم", assess_intro: "اختر الاحتياجات.", btn_match: "توليد", res_title: "خدمات", btn_proceed: "سلة", fil_title: "تصفية", warn_title: "حدود", warn_msg: "لا يتم حفظ البيانات.", note_title: "ملاحظات", btn_save: "حفظ", btn_cancel: "إلغاء", open_portal: "فتح", empty_basket: "فارغة", sev_low: "منخفض", sev_med: "متوسط", sev_high: "عالي", sev_crit: "حرج", fil_loc: "الموقع", fil_avail: "التوفر", fil_cul: "ثقافة", th_case: "رقم", th_needs: "احتياجات", th_sev: "خطورة", th_status: "حالة", th_action: "إجراء", show_filters: "إظهار", hide_filters: "إخفاء" }
+        };
+
+        // --- 4. 辅助函数 ---
+        const findProgramDetails = (programId) => {
+            for (const agency of SERVICES_DB) {
+                const prog = agency.programs.find(p => p.id === programId);
+                if (prog) {
+                    return { ...prog, agencyName: agency.name, agencyUrl: agency.website, agencyIcon: agency.icon, agencyColor: agency.color };
+                }
+            }
+            return null;
+        };
+
+        // --- 4.5 认证模态框组件 ---
+        function AuthModal({ onAuthSuccess, lang, setLang }) {
+            const [isLogin, setIsLogin] = useState(true);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [message, setMessage] = useState({ type: '', text: '' });
+
+            const t = (key) => (translations[lang] && translations[lang][key]) || translations['en'][key] || key;
+
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setMessage({ type: '', text: '' });
+
+                try {
+                    if (isLogin) {
+                        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                        if (error) throw error;
+                        setMessage({ type: 'success', text: 'Login successful!' });
+                        onAuthSuccess(data.user);
+                    } else {
+                        const { data, error } = await supabase.auth.signUp({ email, password });
+                        if (error) throw error;
+                        setMessage({ type: 'success', text: 'Registration successful! Check your email.' });
+                    }
+                } catch (error) {
+                    setMessage({ type: 'error', text: error.message });
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-100 z-[4000] flex items-center justify-center p-4 font-sans animate-enter">
+                    <div className="bg-white p-10 rounded-2xl shadow-xl max-w-md w-full">
+                        <div className="flex justify-end mb-4">
+                            <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-2 rounded-lg border text-sm">
+                                <option value="en">🇬🇧 En</option><option value="zh">🇨🇳 中文</option>
+                            </select>
+                        </div>
+                        
+                        <div className="text-center mb-8">
+                            <div className="text-blue-600 mb-6 flex justify-center"><Icons.Shield size={64} /></div>
+                            <h2 className="text-3xl font-bold text-slate-800 mb-2">Open Referral WA</h2>
+                            <p className="text-slate-500 mb-4">Community Services Portal</p>
+                        </div>
+
+                        {message.text && (
+                            <div className={`mb-4 p-4 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+                                <input 
+                                    type="email" 
+                                    value={email} 
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    required 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+                                <input 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    required 
+                                    minLength={6}
+                                />
+                            </div>
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-lg transition-all disabled:opacity-50"
+                            >
+                                {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+                                {!loading && <Icons.ArrowRight size={20} />}
+                            </button>
+                        </form>
+
+                        <div className="mt-6 text-center">
+                            <button 
+                                onClick={() => setIsLogin(!isLogin)} 
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                                {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 5. App 主组件 ---
+        function App() {
+            // Supabase 认证状态
+            const [user, setUser] = useState(null);
+            const [authLoading, setAuthLoading] = useState(true);
+            const [showAuthModal, setShowAuthModal] = useState(false);
+            
+            const [isLoggedIn, setIsLoggedIn] = useState(false);
+            const [view, setView] = useState('landing');
+            const [lang, setLang] = useState('en');
+            const [basket, setBasket] = useState([]);
+            const [notesOpen, setNotesOpen] = useState(false);
+            const [activeCaseId, setActiveCaseId] = useState('');
+            const [filtersVisible, setFiltersVisible] = useState(false);
+            const [selectedSubNeeds, setSelectedSubNeeds] = useState([]);
+            const [expandedDomains, setExpandedDomains] = useState([]);
+            
+            const [caseload, setCaseload] = useState([
+                { id: '123', location: 'Perth CBD', needs: 'Food, Legal, FDV', status: 'Matching', severity: 'high', step: 2 },
+                { id: '124', location: 'Albany', needs: 'Housing', status: 'Closed', severity: 'low', step: 4 }
+            ]);
+
+            // 检查认证状态
+            useEffect(() => {
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    if (session?.user) {
+                        setUser(session.user);
+                        setIsLoggedIn(true);
+                        loadCaseload(session.user.id);
+                    }
+                    setAuthLoading(false);
+                });
+
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                    if (session?.user) {
+                        setUser(session.user);
+                        setIsLoggedIn(true);
+                        loadCaseload(session.user.id);
+                    } else {
+                        setUser(null);
+                        setIsLoggedIn(false);
+                    }
+                });
+
+                return () => subscription.unsubscribe();
+            }, []);
+
+            // 加载案例数据
+            const loadCaseload = async (userId) => {
+                try {
+                    const { data, error } = await supabase
+                        .from('cases')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    
+                    if (data && data.length > 0) {
+                        // 转换 Supabase 数据为本地格式
+                        const formattedCases = data.map(c => ({
+                            id: c.id,
+                            location: c.case_name || 'Unknown',
+                            needs: (c.referrals || []).map(r => r.program).join(', ') || 'N/A',
+                            status: c.notes ? 'Open' : 'Matching',
+                            severity: 'med',
+                            step: 2
+                        }));
+                        setCaseload(formattedCases);
+                    }
+                } catch (error) {
+                    console.error('Error loading caseload:', error);
+                }
+            };
+
+            // 保存笔记
+            const saveNotes = async (caseId, notes) => {
+                try {
+                    const { error } = await supabase
+                        .from('cases')
+                        .update({ notes })
+                        .eq('id', caseId)
+                        .eq('user_id', user?.id);
+                    
+                    if (error) throw error;
+                    alert("Notes saved successfully!");
+                } catch (error) {
+                    console.error('Error saving notes:', error);
+                    alert("Failed to save notes");
+                }
+            };
+
+            // 登出
+            const handleLogout = async () => {
+                await supabase.auth.signOut();
+                setIsLoggedIn(false);
+                setView('landing');
+            };
+
+            const t = (key) => (translations[lang] && translations[lang][key]) || translations['en'][key] || key;
+            const isRTL = lang === 'ar';
+
+            const nav = (target) => {
+                setView(target);
+                window.scrollTo(0, 0);
+                setFiltersVisible(false);
+            };
+
+            const toggleSeverity = (id) => {
+                setCaseload(prev => prev.map(c => {
+                    if(c.id !== id) return c;
+                    const order = ['low', 'med', 'high', 'crit'];
+                    return { ...c, severity: order[(order.indexOf(c.severity) + 1) % 4] };
+                }));
+            };
+
+            const toggleDomain = (id) => setExpandedDomains(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            const handleSubNeedToggle = (id) => setSelectedSubNeeds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            const addToBasket = (id) => { if(!basket.includes(id)) setBasket([...basket, id]); };
+
+            const matchedAgencies = SERVICES_DB.map(agency => ({
+                ...agency,
+                matchingPrograms: agency.programs.filter(p => p.tags.some(tag => selectedSubNeeds.includes(tag)))
+            })).filter(a => a.matchingPrograms.length > 0);
+
+            const sevColors = {
+                low: 'bg-green-100 text-green-800', med: 'bg-yellow-100 text-yellow-800',
+                high: 'bg-orange-100 text-orange-800', crit: 'bg-red-100 text-red-800'
+            };
+
+            if (!isLoggedIn) {
+                return (
+                    <AuthModal 
+                        onAuthSuccess={(user) => {
+                            setUser(user);
+                            setIsLoggedIn(true);
+                            loadCaseload(user.id);
+                        }} 
+                        lang={lang}
+                        setLang={setLang}
+                    />
+                );
+            }
+
+            if (authLoading) {
+                return (
+                    <div className="fixed inset-0 bg-slate-100 flex items-center justify-center">
+                        <Icons.Loader2 size={48} className="text-blue-600 animate-spin"/>
+                    </div>
+                );
+            }
+
+            return (
+                <div className={`flex flex-col h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
+                    
+                    {/* 浏览器顶部栏模拟 */}
+                    <div className="bg-white border-b border-slate-300 px-4 py-2 flex items-center space-x-4 shadow-sm z-50 shrink-0">
+                        <div className="hidden md:flex space-x-2 shrink-0">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                        </div>
+                        <div className="flex-1 flex justify-center px-4">
+                            <div className="bg-slate-100 px-6 py-1.5 rounded-full text-center text-slate-500 font-mono text-sm border border-slate-200 flex items-center gap-2 w-full max-w-xl justify-center">
+                                <Icons.Lock size={12} className="text-emerald-500" />
+                                <span className="truncate">app.openreferralwa.org.au/{view}</span>
+                            </div>
+                        </div>
+                        <Icons.Bell className="text-slate-400 shrink-0" size={20} />
+                    </div>
+
+                    {/* 导航栏 */}
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+                        <div className="px-4 md:px-10 py-3 flex items-center justify-between">
+                            <div className="font-extrabold text-xl md:text-2xl text-blue-600 cursor-pointer flex items-center gap-2" onClick={() => nav('landing')}>
+                                {t('app_name')}
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-sm cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20">
+                                    <option value="en">🇬🇧 En</option><option value="zh">🇨🇳 中文</option><option value="es">🇪🇸 Es</option>
+                                    <option value="fr">🇫🇷 Fr</option><option value="de">🇩🇪 De</option><option value="ar">🇸🇦 Ar</option>
+                                    <option value="ja">🇯🇵 Ja</option><option value="ko">🇰🇷 Ko</option><option value="vi">🇻🇳 Vi</option><option value="it">🇮🇹 It</option>
+                                </select>
+                                <div className="flex items-center gap-3">
+                                    <div className="cursor-pointer hover:opacity-80" onClick={() => nav('backend')}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-right hidden sm:block">
+                                                <div className="font-bold text-sm text-slate-700">{user?.email || 'Yang'}</div>
+                                                <div className="text-xs text-slate-400">Social Worker</div>
+                                            </div>
+                                            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-md">{(user?.email || 'Y')[0].toUpperCase()}</div>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={handleLogout} 
+                                        className="px-3 py-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition border border-transparent hover:border-red-200"
+                                        title="Logout"
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-4 md:px-10 pb-3 overflow-x-auto scrollbar-hide">
+                            <div className="flex gap-2 whitespace-nowrap">
+                                {[{id:'landing', label:t('nav_dash')}, {id:'assessment', label:t('nav_new')}, {id:'results', label:t('nav_dir')}, {id:'basket', label:`Basket (${basket.length})`}].map(item => (
+                                    <button key={item.id} onClick={() => nav(item.id)} className={`px-4 py-2 rounded-full md:rounded-md text-sm font-medium cursor-pointer transition-all ${view === item.id ? 'bg-blue-50 text-blue-600 font-semibold border border-blue-100' : 'text-slate-500 hover:text-blue-600 hover:bg-slate-100'}`}>
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 overflow-y-auto p-4 md:p-10 w-full max-w-[1600px] mx-auto">
+                        
+                        {/* Landing View */}
+                        {view === 'landing' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center animate-enter">
+                                <div className="bg-white rounded-xl p-12 shadow-lg border border-slate-100 h-full flex flex-col justify-center">
+                                    <h1 className="text-4xl md:text-5xl font-extrabold text-blue-900 mb-6 whitespace-pre-line">Connecting WA,<br/>Ethically.</h1>
+                                    <p className="text-lg text-slate-500 mb-10">The social worker's tool for connecting clients to services without compromising data privacy.</p>
+                                    <div className="flex flex-col md:flex-row gap-4">
+                                        <button onClick={() => nav('assessment')} className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all hover:-translate-y-1">
+                                            <div className="bg-white/20 p-1 rounded-full"><Icons.Accessibility size={16}/></div> {t('btn_start')}
+                                        </button>
+                                        <button onClick={() => nav('backend')} className="px-6 py-4 bg-white border border-slate-200 text-slate-700 hover:border-blue-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
+                                            <Icons.Users size={18}/> {t('btn_cases')}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="h-[400px] lg:h-[600px] rounded-xl overflow-hidden shadow-xl relative group">
+                                    <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=1000&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Social Work" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-blue-900/40 to-transparent"></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Backend View */}
+                        {view === 'backend' && (
+                            <div className="animate-enter">
+                                <div className="flex justify-between items-center mb-8">
+                                    <div><h2 className="text-2xl font-bold text-slate-800">{t('back_title')}</h2><p className="text-slate-500 text-sm">Yang (ID: 9921)</p></div>
+                                    <button className="px-4 py-2 border bg-white rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm"><Icons.Download size={16}/> Report</button>
+                                </div>
+                                <div className="hidden md:block bg-white rounded-xl border shadow-sm overflow-hidden">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-50 border-b">
+                                            <tr>
+                                                {['th_case','th_needs','th_severity','th_status','th_action'].map(k => <th key={k} className="p-5 font-semibold text-slate-500 text-sm">{t(k)}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {caseload.map(c => (
+                                                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="p-5"><div className="font-bold">Case {c.id}</div><div className="text-xs text-slate-400">{c.location}</div></td>
+                                                    <td className="p-5 text-sm text-slate-600">{c.needs}</td>
+                                                    <td className="p-5"><button onClick={() => toggleSeverity(c.id)} className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${sevColors[c.severity]}`}>{t('sev_'+c.severity)}</button></td>
+                                                    <td className="p-5"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${c.status === 'Closed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>{c.status}</span></td>
+                                                    <td className="p-5 flex gap-2"><button onClick={() => nav('assessment')} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded">Open</button><button onClick={() => {setActiveCaseId('Case '+c.id); setNotesOpen(true)}} className="p-1.5 text-slate-400 hover:text-blue-600"><Icons.StickyNote size={16}/></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {/* Mobile Cards */}
+                                <div className="md:hidden space-y-4">
+                                    {caseload.map(c => (
+                                        <div key={c.id} className="bg-white p-5 rounded-xl border shadow-sm">
+                                            <div className="flex justify-between mb-2">
+                                                <div className="font-bold text-lg">Case {c.id}</div>
+                                                <button onClick={() => toggleSeverity(c.id)} className={`px-2 py-1 rounded text-xs font-bold uppercase ${sevColors[c.severity]}`}>{t('sev_'+c.severity)}</button>
+                                            </div>
+                                            <div className="text-sm text-slate-500 mb-4">{c.needs}</div>
+                                            <button onClick={() => nav('assessment')} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm">Continue</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Assessment View */}
+                        {view === 'assessment' && (
+                            <div className="animate-enter">
+                                <button onClick={() => nav('backend')} className="mb-6 text-slate-400 hover:text-slate-600 text-sm font-bold flex items-center gap-2"><Icons.ChevronRight size={16} className="rotate-180"/> Back</button>
+                                <div className="flex justify-between items-center mb-8">
+                                    <h2 className="text-3xl font-bold text-slate-800">{t('assess_title')}: <span className="text-blue-600">Case 123</span></h2>
+                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+                                    <div className="bg-white rounded-xl shadow-sm border p-8">
+                                        <p className="text-slate-500 mb-6 pb-4 border-b">{t('assess_intro')}</p>
+                                        <div className="space-y-4">
+                                            {NEEDS_CONFIG.map(group => {
+                                                const isExpanded = expandedDomains.includes(group.id);
+                                                const selectedCount = group.subCategories.filter(s => selectedSubNeeds.includes(s.id)).length;
+                                                return (
+                                                    <div key={group.id} className={`border rounded-lg transition-all ${isExpanded ? 'border-blue-200 bg-blue-50/30' : 'hover:border-slate-300'}`}>
+                                                        <div onClick={() => toggleDomain(group.id)} className="flex justify-between items-center p-4 cursor-pointer select-none">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`p-2 rounded-lg ${isExpanded ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}><group.icon size={20}/></div>
+                                                                <div>
+                                                                    <div className={`font-bold ${isExpanded ? 'text-blue-800' : 'text-slate-700'}`}>{group.title}</div>
+                                                                    {selectedCount > 0 && <div className="text-xs text-blue-600 font-bold">{selectedCount} selected</div>}
+                                                                </div>
+                                                            </div>
+                                                            <Icons.ChevronDown size={20} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
+                                                        </div>
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pl-14 space-y-2 animate-fade-in">
+                                                                {group.subCategories.map(sub => (
+                                                                    <label key={sub.id} className="flex items-center gap-3 p-2 rounded hover:bg-blue-100/50 cursor-pointer transition">
+                                                                        <input type="checkbox" checked={selectedSubNeeds.includes(sub.id)} onChange={() => handleSubNeedToggle(sub.id)} className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                                                        <span className="text-sm font-medium text-slate-700">{sub.label}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        <button onClick={() => nav('results')} disabled={selectedSubNeeds.length === 0} className={`w-full mt-8 py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-lg transition-all ${selectedSubNeeds.length === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
+                                            {t('btn_match')} <Icons.ArrowRight size={20}/>
+                                        </button>
+                                    </div>
+                                    <div className="hidden lg:block h-[600px] rounded-xl overflow-hidden shadow-lg relative">
+                                        <img src="https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&fit=crop&w=1000&q=80" className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-blue-900/20"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Results View */}
+                        {view === 'results' && (
+                            <div className="animate-enter">
+                                <div className="flex justify-between items-center mb-8">
+                                    <h2 className="text-2xl font-bold text-slate-800">{t('res_title')}</h2>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setFiltersVisible(!filtersVisible)} className="lg:hidden px-4 py-2 border bg-white rounded-lg font-bold shadow-sm flex gap-2"><Icons.Filter size={18}/> {filtersVisible ? t('hide_filters') : t('show_filters')}</button>
+                                        {basket.length > 0 && <button onClick={() => nav('basket')} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg flex gap-2 items-center hover:bg-blue-700 transition">{t('btn_proceed')} <Icons.ChevronRight size={18}/></button>}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8 items-start">
+                                    {/* Filters */}
+                                    <div className={`bg-white rounded-xl border p-6 shadow-sm ${filtersVisible ? 'block' : 'hidden lg:block sticky top-24'}`}>
+                                        <h3 className="font-bold text-lg mb-6 flex gap-2 items-center"><Icons.Briefcase size={18} className="text-blue-500"/> {t('fil_title')}</h3>
+                                        <div className="space-y-6">
+                                            <div><div className="text-xs font-bold text-slate-400 uppercase mb-3">{t('fil_loc')}</div><select className="w-full p-3 border rounded-lg text-sm bg-white"><option>Perth Metro</option><option>Statewide</option></select></div>
+                                            {[
+                                                {title: t('fil_avail'), items: ['Immediate', 'Waitlist']},
+                                                {title: t('fil_cost'), items: ['Free', 'Low Cost']},
+                                                {title: t('fil_cul'), items: ['CaLD Specialist', 'Interpreter', 'Indigenous Focus']}
+                                            ].map((g, i) => (
+                                                <div key={i}><div className="text-xs font-bold text-slate-400 uppercase mb-3">{g.title}</div><div className="space-y-2">{g.items.map((item, idx) => <label key={idx} className="flex gap-2 items-center text-sm text-slate-600"><input type="checkbox" className="w-4 h-4 rounded text-blue-600"/>{item}</label>)}</div></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {/* Results */}
+                                    <div className="space-y-8">
+                                        {matchedAgencies.length === 0 ? (
+                                            <div className="bg-slate-50 border border-dashed rounded-xl p-12 text-center text-slate-500"><Icons.Search size={48} className="mx-auto mb-4 opacity-20"/><p>No matches found.</p></div>
+                                        ) : (
+                                            matchedAgencies.map(agency => (
+                                                <div key={agency.id} className="bg-white rounded-xl border shadow-sm hover:shadow-lg transition overflow-hidden">
+                                                    <div className="p-6 md:p-8 flex flex-col md:flex-row gap-6 border-b bg-slate-50/50">
+                                                        <div className={`w-20 h-20 rounded-2xl ${agency.color} flex items-center justify-center text-4xl shrink-0 shadow-inner`}><agency.icon /></div>
+                                                        <div className="flex-1">
+                                                            <div className="flex flex-col md:flex-row justify-between items-start mb-2">
+                                                                <div><h3 className="text-2xl font-bold text-slate-900">{agency.name}</h3><div className="flex items-center gap-2 mt-1 text-slate-500 text-sm"><Icons.MapPin size={14}/> {agency.location}</div></div>
+                                                                <div className="flex gap-2 mt-2 md:mt-0"><a href={`tel:${agency.phone}`} className="px-3 py-1.5 bg-white border rounded font-bold text-xs flex gap-1 items-center"><Icons.Phone size={12}/> {agency.phone}</a><a href={agency.website} target="_blank" className="px-3 py-1.5 bg-white border rounded font-bold text-xs flex gap-1 items-center"><Icons.Globe size={12}/> Web</a></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="divide-y">
+                                                        {agency.matchingPrograms.map(prog => (
+                                                            <div key={prog.id} className="p-6 md:p-8 hover:bg-blue-50/30 transition">
+                                                                <div className="flex justify-between gap-4 mb-3">
+                                                                    <h4 className="text-lg font-bold text-blue-700 flex gap-2 items-center">{prog.title}</h4>
+                                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold border self-start ${prog.availability.includes('Immediate') ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>{prog.availability}</span>
+                                                                </div>
+                                                                <p className="text-slate-600 text-sm mb-4">{prog.description}</p>
+                                                                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                                                    <div className="text-xs bg-slate-100 px-3 py-2 rounded border text-slate-500"><strong>Elig:</strong> {prog.eligibility}</div>
+                                                                    <button onClick={() => addToBasket(prog.id)} disabled={basket.includes(prog.id)} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition flex gap-2 items-center shadow-sm ${basket.includes(prog.id) ? 'bg-emerald-600 text-white cursor-default' : 'bg-white border text-slate-700 hover:border-blue-600 hover:text-blue-600'}`}>
+                                                                        {basket.includes(prog.id) ? <><Icons.Check size={16}/> {t('btn_added')}</> : <><Icons.CheckCircle size={16}/> {t('btn_add')}</>}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Basket View */}
+                        {view === 'basket' && (
+                            <div className="animate-enter">
+                                <h2 className="text-2xl font-bold text-slate-800 mb-8">Referral Basket: Case 123</h2>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+                                    <div>
+                                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-6 mb-6 flex gap-4 items-center">
+                                            <div className="bg-orange-100 p-3 rounded-full text-orange-600 shrink-0"><Icons.Lock size={24}/></div>
+                                            <div><strong className="block text-orange-800 text-lg">{t('warn_title')}</strong><p className="text-orange-700 text-sm">{t('warn_msg')}</p></div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {basket.length === 0 ? <div className="text-center p-10 text-slate-400 italic bg-white rounded-xl border border-dashed">{t('empty_basket')}</div> : basket.map(id => {
+                                                const agency = SERVICES_DB.find(a => a.programs.some(p => p.id === id));
+                                                const prog = agency?.programs.find(p => p.id === id);
+                                                if(!prog) return null;
+                                                return (
+                                                    <div key={id} className="bg-white p-6 rounded-xl border shadow-sm flex justify-between items-center animate-fade-in">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-12 h-12 rounded-lg ${agency.color} flex items-center justify-center text-xl shrink-0`}><agency.icon size={20}/></div>
+                                                            <div><span className="font-bold text-slate-800 text-lg block">{agency.name}</span><span className="text-sm text-blue-600 font-semibold">{prog.title}</span></div>
+                                                        </div>
+                                                        <a href={agency.website} target="_blank" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition flex items-center gap-2">{t('open_portal')} <Icons.ExternalLink size={14}/></a>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="hidden lg:block h-[400px] rounded-xl overflow-hidden shadow-lg relative">
+                                        <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Notes Modal */}
+                        {notesOpen && (
+                            <div className="fixed inset-0 bg-slate-900/60 z-[3000] flex items-center justify-center p-4 animate-fade-in">
+                                <div className="bg-white w-full max-w-[450px] rounded-xl p-8 shadow-2xl">
+                                    <div className="flex justify-between mb-6"><h3 className="text-blue-600 font-bold text-xl flex gap-2 items-center"><Icons.StickyNote size={20}/> {t('note_title')}</h3><button onClick={() => setNotesOpen(false)}><Icons.X size={20} className="text-slate-400"/></button></div>
+                                    <div className="mb-4 font-bold text-slate-700">{activeCaseId}</div>
+                                    <textarea 
+                                        id="case-notes" 
+                                        className="w-full h-32 p-4 border rounded-lg resize-none mb-4 bg-slate-50" 
+                                        placeholder="Add non-identifying notes here..."
+                                    ></textarea>
+                                    <div className="bg-orange-50 text-orange-700 p-3 rounded-md text-xs mb-6 flex gap-2 items-start"><Icons.AlertTriangle size={14} className="mt-0.5 shrink-0"/><span>{t('note_warn')}</span></div>
+                                    <div className="flex justify-end gap-3">
+                                        <button onClick={() => setNotesOpen(false)} className="px-4 py-2 border rounded text-slate-600 hover:bg-slate-50">{t('btn_cancel')}</button>
+                                        <button onClick={async () => { 
+                                            const notes = document.getElementById('case-notes').value;
+                                            if (user) {
+                                                await saveNotes(activeCaseId, notes);
+                                            } else {
+                                                alert("Notes saved locally.");
+                                            }
+                                            setNotesOpen(false); 
+                                        }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">{t('btn_save')}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
